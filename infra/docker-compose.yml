@@ -4,32 +4,40 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: suggesthelp-postgres
+    env_file:
+      - ../.env.example
     environment:
-      POSTGRES_DB: suggesthelp
-      POSTGRES_USER: suggesthelp
-      POSTGRES_PASSWORD: suggesthelp
+      POSTGRES_DB: ${POSTGRES_DB:-suggesthelp}
+      POSTGRES_USER: ${POSTGRES_USER:-suggesthelp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-suggesthelp}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U suggesthelp -d suggesthelp"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-suggesthelp} -d ${POSTGRES_DB:-suggesthelp}"]
       interval: 10s
       timeout: 5s
       retries: 10
+    networks:
+      - suggesthelp-net
 
   minio:
     image: minio/minio:latest
     container_name: suggesthelp-minio
     command: server /data --console-address ":9001"
+    env_file:
+      - ../.env.example
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
       - minio-data:/data
+    networks:
+      - suggesthelp-net
 
   worker:
     build:
@@ -39,21 +47,25 @@ services:
       WORKER_PORT: 8001
     ports:
       - "8001:8001"
+    networks:
+      - suggesthelp-net
 
   backend:
     build:
       context: ../backend
     container_name: suggesthelp-backend
+    env_file:
+      - ../.env.example
     environment:
       SERVER_PORT: 8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/suggesthelp
-      SPRING_DATASOURCE_USERNAME: suggesthelp
-      SPRING_DATASOURCE_PASSWORD: suggesthelp
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      MINIO_BUCKET: suggesthelp
-      WORKER_BASE_URL: http://worker:8001
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/suggesthelp}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-suggesthelp}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-suggesthelp}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-suggesthelp}
+      WORKER_BASE_URL: ${WORKER_BASE_URL:-http://worker:8001}
     ports:
       - "8080:8080"
     depends_on:
@@ -63,19 +75,29 @@ services:
         condition: service_started
       worker:
         condition: service_started
+    networks:
+      - suggesthelp-net
 
   frontend:
     build:
       context: ../frontend
     container_name: suggesthelp-frontend
+    env_file:
+      - ../.env.example
     environment:
       PORT: 3000
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
     ports:
       - "3000:3000"
     depends_on:
       - backend
+    networks:
+      - suggesthelp-net
 
 volumes:
   pgdata:
   minio-data:
+
+networks:
+  suggesthelp-net:
+    driver: bridge

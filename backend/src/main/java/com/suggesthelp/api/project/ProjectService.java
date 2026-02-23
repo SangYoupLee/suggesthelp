@@ -27,6 +27,28 @@ public class ProjectService {
     }
 
     @Transactional
+    public ProjectResponse createProject(CreateProjectRequest request) {
+        Long id = jdbcTemplate.queryForObject("""
+                INSERT INTO projects(user_id, created_by, name, client_org, budget, due_date, status, created_at, updated_at)
+                VALUES (NULL, 'system', ?, ?, ?, ?, 'DRAFT', NOW(), NOW())
+                RETURNING id
+                """, Long.class, request.name(), request.clientOrg(), request.budget(), request.dueDate());
+
+        return jdbcTemplate.queryForObject("""
+                SELECT id, name, client_org, budget, status, created_at
+                FROM projects
+                WHERE id = ?
+                """, (rs, rowNum) -> new ProjectResponse(
+                rs.getLong("id"),
+                rs.getString("name"),
+                rs.getString("client_org"),
+                rs.getLong("budget"),
+                rs.getString("status"),
+                rs.getObject("created_at", OffsetDateTime.class)
+        ), id);
+    }
+
+    @Transactional
     public DocumentUploadResponse uploadDocument(Long projectId, MultipartFile file) throws Exception {
         validateProject(projectId);
 
@@ -44,12 +66,40 @@ public class ProjectService {
                 .build());
 
         Long id = jdbcTemplate.queryForObject("""
-                INSERT INTO documents(project_id, user_id, file_name, content_type, object_key, sha256, status, created_at, updated_at)
-                VALUES (?, NULL, ?, ?, ?, ?, 'UPLOADED', NOW(), NOW())
+                INSERT INTO documents(project_id, user_id, created_by, file_name, content_type, object_key, sha256, status, created_at, updated_at)
+                VALUES (?, NULL, 'system', ?, ?, ?, ?, 'uploaded', NOW(), NOW())
                 RETURNING id
                 """, Long.class, projectId, file.getOriginalFilename(), file.getContentType(), objectKey, sha256);
 
-        return new DocumentUploadResponse(id, projectId, file.getOriginalFilename(), objectKey, sha256, "UPLOADED", OffsetDateTime.now(ZoneOffset.UTC));
+        return new DocumentUploadResponse(id, projectId, file.getOriginalFilename(), objectKey, sha256, "uploaded", OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    @Transactional(readOnly = true)
+    public ProjectStatusResponse getProjectStatus(Long projectId) {
+        validateProject(projectId);
+
+        Long latestDocumentId = jdbcTemplate.query("""
+                SELECT id FROM documents WHERE project_id = ? ORDER BY created_at DESC LIMIT 1
+                """, rs -> rs.next() ? rs.getLong(1) : null, projectId);
+
+        String latestDocumentStatus = latestDocumentId == null ? null : jdbcTemplate.queryForObject(
+                "SELECT status FROM documents WHERE id = ?", String.class, latestDocumentId);
+
+        Long latestAnalysisRunId = jdbcTemplate.query("""
+                SELECT id FROM analysis_runs WHERE project_id = ? ORDER BY created_at DESC LIMIT 1
+                """, rs -> rs.next() ? rs.getLong(1) : null, projectId);
+
+        String latestAnalysisRunStatus = latestAnalysisRunId == null ? null : jdbcTemplate.queryForObject(
+                "SELECT status FROM analysis_runs WHERE id = ?", String.class, latestAnalysisRunId);
+
+        return new ProjectStatusResponse(
+                projectId,
+                latestDocumentId,
+                latestDocumentStatus,
+                latestAnalysisRunId,
+                latestAnalysisRunStatus,
+                OffsetDateTime.now(ZoneOffset.UTC)
+        );
     }
 
     private void validateProject(Long projectId) {
