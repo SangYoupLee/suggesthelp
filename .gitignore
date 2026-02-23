@@ -1,0 +1,20 @@
+# Node
+node_modules/
+.next/
+out/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Java
+backend/target/
+*.class
+
+# Env
+.env
+
+# IDE
+.vscode/
+.idea/
