@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/suggesthelp}
+    username: ${SPRING_DATASOURCE_USERNAME:suggesthelp}
+    password: ${SPRING_DATASOURCE_PASSWORD:suggesthelp}
+  flyway:
+    enabled: true
+
+server:
+  error:
+    whitelabel:
+      enabled: false
+
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:suggesthelp}
